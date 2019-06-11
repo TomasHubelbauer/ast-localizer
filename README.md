@@ -12,3 +12,5 @@ This is a project where I attempt to see if the following would work:
 - Observe a localized application without the need to clutter the code with resource lookup
 
 `npm build` or `npm run postbuild` with an existing `build` directory
+
+- Add a non-CRA version hosted on GitHub Pages with JS/TS source input on one side and compiled output on the other for a demo
