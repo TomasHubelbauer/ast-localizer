@@ -1,5 +1,7 @@
 # CRA AST Localize
 
+[**WEB**](https://tomashubelbauer.github.io/cra-ast-localize)
+
 This is a project where I attempt to see if the following would work:
 
 - [x] Scaffold a normal CRA project
