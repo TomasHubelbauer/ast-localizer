@@ -5,7 +5,7 @@ This is a project where I attempt to see if the following would work:
 - [x] Scaffold a normal CRA project
 - [x] Add a post-build script which reads the AST of the emitted files
 - [x] Use source maps to find code corresponding to user files and avoid code from dependencies
-- [ ] Use context heuristics to kick out invalid literals (identifiers, JSX/TSX, …)
+- [x] Use context heuristics to kick out invalid literals (identifiers, JSX/TSX, …)
 - [ ] Replace string literals with a call to a localizer function (like `localize('')`)
 - [ ] Warn on localization keys which are not contained within the localization files
 - [ ] Append the localizer function implementation and the localization resources
@@ -19,4 +19,4 @@ This is a project where I attempt to see if the following would work:
 
 With JS/TS source input on one side and compiled output on the other for a demo
 
-### Load the original TypeScript files and skip over non-literals
+### Fix the node kind determination from the line and column values
