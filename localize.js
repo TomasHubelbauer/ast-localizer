@@ -5,7 +5,7 @@ const sourcemap = require('source-map');
 
 void async function () {
   for await (const file of klaw('build')) {
-    // TODO: Use source map and limit the inspection area only to user code not code from dependencies
+    // TODO: See if the second and third condition can be removed in favor of the sourcemap `source` check
     if (!file.path.endsWith('.js') || file.path.includes('runtime~min') || !file.path.includes('main.')) {
       continue;
     }
