@@ -51,11 +51,13 @@ async function traverse(/** @type{ts.Node} */ node, sourceMap) {
 
       let newNode;
       getNode(sourceFile, line, column + 1, _node => newNode = _node);
-      console.log(JSON.stringify(literalLikeNode.text), `src/${source}:${line}:${column + 1}`, newNode ? kinds[newNode.kind] : undefined);
+      if (newNode && (newNode.kind === ts.SyntaxKind.StringLiteral || newNode.kind === ts.SyntaxKind.FirstBinaryOperator)) {
+        console.log(JSON.stringify(literalLikeNode.text), `src/${source}:${line}:${column + 1}`, newNode ? kinds[newNode.kind] : undefined);
 
-      if (literalLikeNode.text !== '' && resources[literalLikeNode.text] !== undefined) {
-        // TODO: Find a way to replace the node or update its text which reflects in the SourceFile.getText() output
-        literalLikeNode.text = resources[literalLikeNode.text];
+        if (literalLikeNode.text !== '' && resources[literalLikeNode.text] !== undefined) {
+          // TODO: Find a way to replace the node or update its text which reflects in the SourceFile.getText() output
+          literalLikeNode.text = resources[literalLikeNode.text];
+        }
       }
     }
   }
@@ -66,13 +68,15 @@ async function traverse(/** @type{ts.Node} */ node, sourceMap) {
 }
 
 function getNode(node, line, column, callback) {
-  try {
-    const position = node.getSourceFile().getPositionOfLineAndCharacter(line, column);
-    if (node.getStart() <= position && node.getEnd() >= position) {
-      callback(node);
-    }
-  } catch (error) {
-    // TODO: Find out why *Debug failure - false expression* happens
+  let { line: startLine, character: startColumn } = node.getSourceFile().getLineAndCharacterOfPosition(node.getStart());
+  startLine++;
+  startColumn++;
+  let { line: endLine, character: endColumn } = node.getSourceFile().getLineAndCharacterOfPosition(node.getEnd());
+  endLine++;
+  endColumn++;
+  //console.log(kinds[node.kind], line, column, startLine, startColumn, endLine, endColumn);
+  if (startLine <= line && startColumn <= column && endLine >= line && endColumn >= column) {
+    callback(node);
   }
 
   for (const child of node.getChildren()) {

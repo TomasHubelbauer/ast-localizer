@@ -19,4 +19,19 @@ This is a project where I attempt to see if the following would work:
 
 With JS/TS source input on one side and compiled output on the other for a demo
 
-### Fix the node kind determination from the line and column values
+### Find out why some of the tokens get marked as `FirstBinaryOperator`
+
+Maybe the string literal is a part of an expression.
+
+### Replace the hardcoded text replacement with a localizer function invocation
+
+Add two modes to work in
+
+One where the text gets replace with a localizer version and the localized
+version with the hardcoded localized strings gets saved with a locale suffix.
+This mode is useful for translating app to another locale statically without any
+runtime localization support.
+
+Another where the string literals get replaced with a call to a localizer
+function so that at runtime, a locale can be selected and on next render, the
+strings are pulled from the new locale.
