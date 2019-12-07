@@ -1,6 +1,7 @@
 const ts = require('typescript');
 const fs = require('fs-extra');
 const klaw = require('klaw');
+const sourcemap = require('source-map');
 
 void async function () {
   for await (const file of klaw('build')) {
@@ -16,8 +17,11 @@ void async function () {
       true
     );
 
-    traverse(sourceFile);
-    await fs.writeFile(file.path.slice(0, -'.js'.length) + '.cs-cz.js', sourceFile.getText());
+    traverse(
+      sourceFile,
+      await new sourcemap.SourceMapConsumer(await fs.readJson(file.path + '.map'))
+    );
+    //await fs.writeFile(file.path.slice(0, -'.js'.length) + '.cs-cz.js', sourceFile.getText());
   }
 }()
 
@@ -30,14 +34,20 @@ const resources = {
 };
 
 // TODO: Filter out function names and dictionary keys and JSX/TSX and other invalic contexts
-function traverse(/** @type{ts.Node} */ node) {
+function traverse(/** @type{ts.Node} */ node, sourceMap) {
   if (node.kind === 10) {
     /** @type{ts.LiteralLikeNode} */ const literalLikeNode = node;
-    if (literalLikeNode.text !== '' && resources[literalLikeNode.text] !== undefined) {
-      // TODO: Find a way to replace the node or update its text which reflects in the SourceFile.getText() output
-      literalLikeNode.text = resources[literalLikeNode.text];
+
+    const { source, line, column, name } = sourceMap.originalPositionFor({ line: 1, column: literalLikeNode.pos });
+    if (source && name === null && source !== '../webpack/bootstrap') {
+      console.log(JSON.stringify(literalLikeNode.text), `src/${source}:${line}:${column + 1}`, name);
+
+      if (literalLikeNode.text !== '' && resources[literalLikeNode.text] !== undefined) {
+        // TODO: Find a way to replace the node or update its text which reflects in the SourceFile.getText() output
+        literalLikeNode.text = resources[literalLikeNode.text];
+      }
     }
   }
 
-  ts.forEachChild(node, traverse);
+  ts.forEachChild(node, node => traverse(node, sourceMap));
 }
