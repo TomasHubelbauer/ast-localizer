@@ -13,6 +13,7 @@ export default class App extends Component {
             href="https://reactjs.org"
             target="_blank"
             rel="noopener noreferrer"
+            title="Learn React"
           >
             Learn React
           </a>

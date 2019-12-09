@@ -2,11 +2,23 @@ const ts = require('typescript');
 const fs = require('fs-extra');
 const klaw = require('klaw');
 const sourcemap = require('source-map');
+const { relative } = require('path');
 
 void async function () {
+  const locale = process.argv[2];
+  if (!locale) {
+    return;
+  }
+
+  const resources = await fs.readJson('res/' + locale + '.json');
   for await (const file of klaw('build')) {
     // TODO: See if the second and third condition can be removed in favor of the sourcemap `source` check
     if (!file.path.endsWith('.js') || file.path.includes('runtime~min') || !file.path.includes('main.')) {
+      if (file.stats.isFile()) {
+        await fs.ensureFile(file.path.replace('build', `build-${locale}`));
+        await fs.copyFile(file.path, file.path.replace('build', `build-${locale}`));
+      }
+
       continue;
     }
 
@@ -19,24 +31,22 @@ void async function () {
 
     await traverse(
       sourceFile,
-      await new sourcemap.SourceMapConsumer(await fs.readJson(file.path + '.map'))
+      await new sourcemap.SourceMapConsumer(await fs.readJson(file.path + '.map')),
+      resources
     );
-    //await fs.writeFile(file.path.slice(0, -'.js'.length) + '.cs-cz.js', sourceFile.getText());
+
+    await fs.writeFile(file.path.replace('build', `build-${locale}`), sourceFile.getText());
   }
 }()
 
-// TODO: Load localization resources from localization files
-// TODO: Allow more context for being able to specify keys better (file name, class name, …)
-const resources = {
-  'Edit ': 'Upravte',
-  ' and save to reload.': ' a ulozte zmeny pro obnoveni v prohlizeci.',
-  'Learn React': 'Naucte se React',
-};
+async function traverse(/** @type{ts.Node} */ sourceFile, sourceMap, resources) {
+  if (sourceFile.kind === 10) {
+    /** @type{ts.LiteralLikeNode} */ const literalLikeNode = sourceFile;
 
-// TODO: Filter out function names and dictionary keys and JSX/TSX and other invalic contexts
-async function traverse(/** @type{ts.Node} */ node, sourceMap) {
-  if (node.kind === 10) {
-    /** @type{ts.LiteralLikeNode} */ const literalLikeNode = node;
+    const length = literalLikeNode.text.length + 2 /* Quotes */;
+    if (literalLikeNode.end - literalLikeNode.pos !== length) {
+      throw new Error('Expected a quoted string literal!');
+    }
 
     const { source, line, column, name } = sourceMap.originalPositionFor({ line: 1, column: literalLikeNode.pos });
     if (source && name === null && source !== '../webpack/bootstrap') {
@@ -48,22 +58,42 @@ async function traverse(/** @type{ts.Node} */ node, sourceMap) {
         true
       );
 
+      console.log(JSON.stringify(literalLikeNode.text));
+      console.log(`  ${relative(process.cwd(), literalLikeNode.getSourceFile().fileName)}:1:${literalLikeNode.pos + 1}`);
+      console.log(`  src/${source}:${line}:${column + 1}`);
 
-      let newNode;
-      getNode(sourceFile, line, column + 1, _node => newNode = _node);
-      if (newNode && (newNode.kind === ts.SyntaxKind.StringLiteral || newNode.kind === ts.SyntaxKind.FirstBinaryOperator)) {
-        console.log(JSON.stringify(literalLikeNode.text), `src/${source}:${line}:${column + 1}`, newNode ? kinds[newNode.kind] : undefined);
+      let node;
+      getNode(sourceFile, line, column + 1, n => node = n);
+      if (!node) {
+        throw new Error('Chyba');
+      }
 
-        if (literalLikeNode.text !== '' && resources[literalLikeNode.text] !== undefined) {
-          // TODO: Find a way to replace the node or update its text which reflects in the SourceFile.getText() output
-          literalLikeNode.text = resources[literalLikeNode.text];
+      switch (node.kind) {
+        case ts.SyntaxKind.StringLiteral: {
+          if (node.text.length + 2 /* Quotes */ !== length) {
+            throw new Error('The string lengths did not match up!');
+          }
+
+          if (literalLikeNode.text !== '' && resources[literalLikeNode.text] !== undefined) {
+            literalLikeNode.text = resources[literalLikeNode.text];
+            console.log('  Localized to', JSON.stringify(resources[node.text]));
+          }
+          else {
+            console.log('  Left alone - no localization key for', JSON.stringify(resources[node.text]));
+          }
+
+          break;
+        }
+        case ts.SyntaxKind.FirstBinaryOperator: {
+          console.log(`  Misidentified at the start of a JSX element: expected a string literal of length ${length} (including quotes), but got a JSX element angle bracket of length ${node.end - node.pos}`);
+          break;
         }
       }
     }
   }
 
-  for (const child of node.getChildren()) {
-    await traverse(child, sourceMap);
+  for (const child of sourceFile.getChildren()) {
+    await traverse(child, sourceMap, resources);
   }
 }
 
@@ -74,7 +104,6 @@ function getNode(node, line, column, callback) {
   let { line: endLine, character: endColumn } = node.getSourceFile().getLineAndCharacterOfPosition(node.getEnd());
   endLine++;
   endColumn++;
-  //console.log(kinds[node.kind], line, column, startLine, startColumn, endLine, endColumn);
   if (startLine <= line && startColumn <= column && endLine >= line && endColumn >= column) {
     callback(node);
   }
@@ -83,354 +112,3 @@ function getNode(node, line, column, callback) {
     getNode(child, line, column, callback);
   }
 }
-
-const kinds = {
-  0: "Unknown",
-  1: "EndOfFileToken",
-  2: "SingleLineCommentTrivia",
-  3: "MultiLineCommentTrivia",
-  4: "NewLineTrivia",
-  5: "WhitespaceTrivia",
-  6: "ShebangTrivia",
-  7: "ConflictMarkerTrivia",
-  8: "NumericLiteral",
-  9: "BigIntLiteral",
-  10: "StringLiteral",
-  11: "JsxText",
-  12: "JsxTextAllWhiteSpaces",
-  13: "RegularExpressionLiteral",
-  14: "NoSubstitutionTemplateLiteral",
-  15: "TemplateHead",
-  16: "TemplateMiddle",
-  17: "TemplateTail",
-  18: "OpenBraceToken",
-  19: "CloseBraceToken",
-  20: "OpenParenToken",
-  21: "CloseParenToken",
-  22: "OpenBracketToken",
-  23: "CloseBracketToken",
-  24: "DotToken",
-  25: "DotDotDotToken",
-  26: "SemicolonToken",
-  27: "CommaToken",
-  28: "LessThanToken",
-  29: "LessThanSlashToken",
-  30: "GreaterThanToken",
-  31: "LessThanEqualsToken",
-  32: "GreaterThanEqualsToken",
-  33: "EqualsEqualsToken",
-  34: "ExclamationEqualsToken",
-  35: "EqualsEqualsEqualsToken",
-  36: "ExclamationEqualsEqualsToken",
-  37: "EqualsGreaterThanToken",
-  38: "PlusToken",
-  39: "MinusToken",
-  40: "AsteriskToken",
-  41: "AsteriskAsteriskToken",
-  42: "SlashToken",
-  43: "PercentToken",
-  44: "PlusPlusToken",
-  45: "MinusMinusToken",
-  46: "LessThanLessThanToken",
-  47: "GreaterThanGreaterThanToken",
-  48: "GreaterThanGreaterThanGreaterThanToken",
-  49: "AmpersandToken",
-  50: "BarToken",
-  51: "CaretToken",
-  52: "ExclamationToken",
-  53: "TildeToken",
-  54: "AmpersandAmpersandToken",
-  55: "BarBarToken",
-  56: "QuestionToken",
-  57: "ColonToken",
-  58: "AtToken",
-  59: "BacktickToken",
-  60: "EqualsToken",
-  61: "PlusEqualsToken",
-  62: "MinusEqualsToken",
-  63: "AsteriskEqualsToken",
-  64: "AsteriskAsteriskEqualsToken",
-  65: "SlashEqualsToken",
-  66: "PercentEqualsToken",
-  67: "LessThanLessThanEqualsToken",
-  68: "GreaterThanGreaterThanEqualsToken",
-  69: "GreaterThanGreaterThanGreaterThanEqualsToken",
-  70: "AmpersandEqualsToken",
-  71: "BarEqualsToken",
-  72: "CaretEqualsToken",
-  73: "Identifier",
-  74: "BreakKeyword",
-  75: "CaseKeyword",
-  76: "CatchKeyword",
-  77: "ClassKeyword",
-  78: "ConstKeyword",
-  79: "ContinueKeyword",
-  80: "DebuggerKeyword",
-  81: "DefaultKeyword",
-  82: "DeleteKeyword",
-  83: "DoKeyword",
-  84: "ElseKeyword",
-  85: "EnumKeyword",
-  86: "ExportKeyword",
-  87: "ExtendsKeyword",
-  88: "FalseKeyword",
-  89: "FinallyKeyword",
-  90: "ForKeyword",
-  91: "FunctionKeyword",
-  92: "IfKeyword",
-  93: "ImportKeyword",
-  94: "InKeyword",
-  95: "InstanceOfKeyword",
-  96: "NewKeyword",
-  97: "NullKeyword",
-  98: "ReturnKeyword",
-  99: "SuperKeyword",
-  100: "SwitchKeyword",
-  101: "ThisKeyword",
-  102: "ThrowKeyword",
-  103: "TrueKeyword",
-  104: "TryKeyword",
-  105: "TypeOfKeyword",
-  106: "VarKeyword",
-  107: "VoidKeyword",
-  108: "WhileKeyword",
-  109: "WithKeyword",
-  110: "ImplementsKeyword",
-  111: "InterfaceKeyword",
-  112: "LetKeyword",
-  113: "PackageKeyword",
-  114: "PrivateKeyword",
-  115: "ProtectedKeyword",
-  116: "PublicKeyword",
-  117: "StaticKeyword",
-  118: "YieldKeyword",
-  119: "AbstractKeyword",
-  120: "AsKeyword",
-  121: "AnyKeyword",
-  122: "AsyncKeyword",
-  123: "AwaitKeyword",
-  124: "BooleanKeyword",
-  125: "ConstructorKeyword",
-  126: "DeclareKeyword",
-  127: "GetKeyword",
-  128: "InferKeyword",
-  129: "IsKeyword",
-  130: "KeyOfKeyword",
-  131: "ModuleKeyword",
-  132: "NamespaceKeyword",
-  133: "NeverKeyword",
-  134: "ReadonlyKeyword",
-  135: "RequireKeyword",
-  136: "NumberKeyword",
-  137: "ObjectKeyword",
-  138: "SetKeyword",
-  139: "StringKeyword",
-  140: "SymbolKeyword",
-  141: "TypeKeyword",
-  142: "UndefinedKeyword",
-  143: "UniqueKeyword",
-  144: "UnknownKeyword",
-  145: "FromKeyword",
-  146: "GlobalKeyword",
-  147: "BigIntKeyword",
-  148: "OfKeyword",
-  149: "QualifiedName",
-  150: "ComputedPropertyName",
-  151: "TypeParameter",
-  152: "Parameter",
-  153: "Decorator",
-  154: "PropertySignature",
-  155: "PropertyDeclaration",
-  156: "MethodSignature",
-  157: "MethodDeclaration",
-  158: "Constructor",
-  159: "GetAccessor",
-  160: "SetAccessor",
-  161: "CallSignature",
-  162: "ConstructSignature",
-  163: "IndexSignature",
-  164: "TypePredicate",
-  165: "TypeReference",
-  166: "FunctionType",
-  167: "ConstructorType",
-  168: "TypeQuery",
-  169: "TypeLiteral",
-  170: "ArrayType",
-  171: "TupleType",
-  172: "OptionalType",
-  173: "RestType",
-  174: "UnionType",
-  175: "IntersectionType",
-  176: "ConditionalType",
-  177: "InferType",
-  178: "ParenthesizedType",
-  179: "ThisType",
-  180: "TypeOperator",
-  181: "IndexedAccessType",
-  182: "MappedType",
-  183: "LiteralType",
-  184: "ImportType",
-  185: "ObjectBindingPattern",
-  186: "ArrayBindingPattern",
-  187: "BindingElement",
-  188: "ArrayLiteralExpression",
-  189: "ObjectLiteralExpression",
-  190: "PropertyAccessExpression",
-  191: "ElementAccessExpression",
-  192: "CallExpression",
-  193: "NewExpression",
-  194: "TaggedTemplateExpression",
-  195: "TypeAssertionExpression",
-  196: "ParenthesizedExpression",
-  197: "FunctionExpression",
-  198: "ArrowFunction",
-  199: "DeleteExpression",
-  200: "TypeOfExpression",
-  201: "VoidExpression",
-  202: "AwaitExpression",
-  203: "PrefixUnaryExpression",
-  204: "PostfixUnaryExpression",
-  205: "BinaryExpression",
-  206: "ConditionalExpression",
-  207: "TemplateExpression",
-  208: "YieldExpression",
-  209: "SpreadElement",
-  210: "ClassExpression",
-  211: "OmittedExpression",
-  212: "ExpressionWithTypeArguments",
-  213: "AsExpression",
-  214: "NonNullExpression",
-  215: "MetaProperty",
-  216: "SyntheticExpression",
-  217: "TemplateSpan",
-  218: "SemicolonClassElement",
-  219: "Block",
-  220: "VariableStatement",
-  221: "EmptyStatement",
-  222: "ExpressionStatement",
-  223: "IfStatement",
-  224: "DoStatement",
-  225: "WhileStatement",
-  226: "ForStatement",
-  227: "ForInStatement",
-  228: "ForOfStatement",
-  229: "ContinueStatement",
-  230: "BreakStatement",
-  231: "ReturnStatement",
-  232: "WithStatement",
-  233: "SwitchStatement",
-  234: "LabeledStatement",
-  235: "ThrowStatement",
-  236: "TryStatement",
-  237: "DebuggerStatement",
-  238: "VariableDeclaration",
-  239: "VariableDeclarationList",
-  240: "FunctionDeclaration",
-  241: "ClassDeclaration",
-  242: "InterfaceDeclaration",
-  243: "TypeAliasDeclaration",
-  244: "EnumDeclaration",
-  245: "ModuleDeclaration",
-  246: "ModuleBlock",
-  247: "CaseBlock",
-  248: "NamespaceExportDeclaration",
-  249: "ImportEqualsDeclaration",
-  250: "ImportDeclaration",
-  251: "ImportClause",
-  252: "NamespaceImport",
-  253: "NamedImports",
-  254: "ImportSpecifier",
-  255: "ExportAssignment",
-  256: "ExportDeclaration",
-  257: "NamedExports",
-  258: "ExportSpecifier",
-  259: "MissingDeclaration",
-  260: "ExternalModuleReference",
-  261: "JsxElement",
-  262: "JsxSelfClosingElement",
-  263: "JsxOpeningElement",
-  264: "JsxClosingElement",
-  265: "JsxFragment",
-  266: "JsxOpeningFragment",
-  267: "JsxClosingFragment",
-  268: "JsxAttribute",
-  269: "JsxAttributes",
-  270: "JsxSpreadAttribute",
-  271: "JsxExpression",
-  272: "CaseClause",
-  273: "DefaultClause",
-  274: "HeritageClause",
-  275: "CatchClause",
-  276: "PropertyAssignment",
-  277: "ShorthandPropertyAssignment",
-  278: "SpreadAssignment",
-  279: "EnumMember",
-  280: "UnparsedPrologue",
-  281: "UnparsedPrepend",
-  282: "UnparsedText",
-  283: "UnparsedInternalText",
-  284: "UnparsedSyntheticReference",
-  285: "SourceFile",
-  286: "Bundle",
-  287: "UnparsedSource",
-  288: "InputFiles",
-  289: "JSDocTypeExpression",
-  290: "JSDocAllType",
-  291: "JSDocUnknownType",
-  292: "JSDocNullableType",
-  293: "JSDocNonNullableType",
-  294: "JSDocOptionalType",
-  295: "JSDocFunctionType",
-  296: "JSDocVariadicType",
-  297: "JSDocComment",
-  298: "JSDocTypeLiteral",
-  299: "JSDocSignature",
-  300: "JSDocTag",
-  301: "JSDocAugmentsTag",
-  302: "JSDocClassTag",
-  303: "JSDocCallbackTag",
-  304: "JSDocEnumTag",
-  305: "JSDocParameterTag",
-  306: "JSDocReturnTag",
-  307: "JSDocThisTag",
-  308: "JSDocTypeTag",
-  309: "JSDocTemplateTag",
-  310: "JSDocTypedefTag",
-  311: "JSDocPropertyTag",
-  312: "SyntaxList",
-  313: "NotEmittedStatement",
-  314: "PartiallyEmittedExpression",
-  315: "CommaListExpression",
-  316: "MergeDeclarationMarker",
-  317: "EndOfDeclarationMarker",
-  318: "Count",
-  60: "FirstAssignment",
-  72: "LastAssignment",
-  61: "FirstCompoundAssignment",
-  72: "LastCompoundAssignment",
-  74: "FirstReservedWord",
-  109: "LastReservedWord",
-  74: "FirstKeyword",
-  148: "LastKeyword",
-  110: "FirstFutureReservedWord",
-  118: "LastFutureReservedWord",
-  164: "FirstTypeNode",
-  184: "LastTypeNode",
-  18: "FirstPunctuation",
-  72: "LastPunctuation",
-  0: "FirstToken",
-  148: "LastToken",
-  2: "FirstTriviaToken",
-  7: "LastTriviaToken",
-  8: "FirstLiteralToken",
-  14: "LastLiteralToken",
-  14: "FirstTemplateToken",
-  17: "LastTemplateToken",
-  28: "FirstBinaryOperator",
-  72: "LastBinaryOperator",
-  149: "FirstNode",
-  289: "FirstJSDocNode",
-  311: "LastJSDocNode",
-  300: "FirstJSDocTagNode",
-  311: "LastJSDocTagNode",
-};
