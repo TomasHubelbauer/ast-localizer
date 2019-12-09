@@ -12,7 +12,7 @@ void async function () {
 
   const resources = await fs.readJson('res/' + locale + '.json');
   for await (const file of klaw('build')) {
-    // TODO: See if the second and third condition can be removed in favor of the sourcemap `source` check
+    // TODO: Remove the second and third conditions and instead skip files with no sourcemaps
     if (!file.path.endsWith('.js') || file.path.includes('runtime~min') || !file.path.includes('main.')) {
       if (file.stats.isFile()) {
         await fs.ensureFile(file.path.replace('build', `build-${locale}`));
@@ -29,6 +29,7 @@ void async function () {
       true
     );
 
+    // TODO: Replace the recursion with the iteration as used in https://github.com/TomasHubelbauer/cra-sourcemap
     await traverse(
       sourceFile,
       await new sourcemap.SourceMapConsumer(await fs.readJson(file.path + '.map')),

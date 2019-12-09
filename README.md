@@ -40,13 +40,6 @@ Another where the string literals get replaced with a call to a localizer
 function so that at runtime, a locale can be selected and on next render, the
 strings are pulled from the new locale.
 
-### Report incorrect string literal placement when among JSX children
+### Await for the string literal source mapping issue to get fixed
 
-This is either to the sourcemap generator CRA uses or to CRA directly, don't
-know.
-
-This is unlikely something I could fix using heuristics, because if there are
-children which are part string literals and part nested elements, the positions
-pretty much all work out wrong and some literals even point to the same source
-caret. I could attempt some string length + neighboring nodes tricks, but that
-would be too fragile.
+https://github.com/TomasHubelbauer/cra-sourcemap
