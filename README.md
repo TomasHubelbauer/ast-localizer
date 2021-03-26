@@ -67,3 +67,9 @@ function so that at runtime, a locale can be selected and on next render, the
 strings are pulled from the new locale.
 
 ### Finalize the alternative solution - `localize2.js`
+
+### Follow up on the problem with WebPack/Babel source map string literal info
+
+https://github.com/TomasHubelbauer/babel-sourcemap
+
+I seem to remember this was needed for this project to be able to be finished.
