@@ -36,6 +36,14 @@ Instead, I'm now trying to make the following work:
 - [ ] Validate the remaining sets of literals match in count and order
 - [ ] Replace the string literals in the target with corresponding resource strings
 
+I am prototyping this in `index.js`:
+
+- Go to `cra-sample` and run `npm install` and `npm run build`
+- Copy the `build` into `coverage` to not change strings inline in development
+  - Use the name `coverage` because it is ignored in the CRA scaffold
+  - Do this after each run so they two directories start off the same
+- Run `node .` and compare files in `build` with files in `build-copy`
+
 ## To-Do
 
 ### Add a non-CRA version hosted on GitHub Pages
@@ -74,3 +82,9 @@ me to continue.
 https://github.com/TomasHubelbauer/babel-sourcemap
 
 I seem to remember this was needed for this project to be able to be finished.
+
+### Fix the broken shift trackers in `index.js` and finalize the implementation
+
+This new implementation works without the source map, but replacing the strings
+and keeping track of the differences in coordinates due to the changes compared
+to the original is broken.
