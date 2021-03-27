@@ -1,7 +1,5 @@
 # CRA AST Localize
 
-[**WEB**](https://tomashubelbauer.github.io/cra-ast-localize)
-
 This is a project where I attempt to see if replacing string literals with their
 localized versions (or a localizer function invocations) could feasibly be done
 by running a `postbuild` step which uses the TypeScript compiler API to pull out

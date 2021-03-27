@@ -1,0 +1,3 @@
+[submodule "cra-sample"]
+	path = cra-sample
+	url = https://github.com/tomashubelbauer/cra-sample
