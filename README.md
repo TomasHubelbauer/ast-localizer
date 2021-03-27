@@ -68,6 +68,9 @@ strings are pulled from the new locale.
 
 ### Finalize the alternative solution - `localize2.js`
 
+This should be immune to the Babel sourcemap problem described below and allow
+me to continue.
+
 ### Follow up on the problem with WebPack/Babel source map string literal info
 
 https://github.com/TomasHubelbauer/babel-sourcemap
