@@ -1,5 +1,7 @@
 # CRA AST Localize
 
+> Note: the blocking issue should now be fixed: https://github.com/babel/babel/issues/10869
+
 This is a project where I attempt to see if replacing string literals with their
 localized versions (or a localizer function invocations) could feasibly be done
 by running a `postbuild` step which uses the TypeScript compiler API to pull out
