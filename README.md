@@ -1,6 +1,7 @@
 # CRA AST Localize
 
-> Note: the blocking issue should now be fixed: https://github.com/babel/babel/issues/10869
+> Note: https://github.com/TomasHubelbauer/babel-sourcemap has been fixed now!
+> It is no longer blocking the implementation of the idea in this repo.
 
 This is a project where I attempt to see if replacing string literals with their
 localized versions (or a localizer function invocations) could feasibly be done
@@ -78,12 +79,6 @@ strings are pulled from the new locale.
 
 This should be immune to the Babel sourcemap problem described below and allow
 me to continue.
-
-### Follow up on the problem with WebPack/Babel source map string literal info
-
-https://github.com/TomasHubelbauer/babel-sourcemap
-
-I seem to remember this was needed for this project to be able to be finished.
 
 ### Fix the broken shift trackers in `index.js` and finalize the implementation
 
