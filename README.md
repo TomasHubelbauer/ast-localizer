@@ -1,14 +1,27 @@
 # CRA AST Localize
 
-> Note: https://github.com/TomasHubelbauer/babel-sourcemap has been fixed now!
-> It is no longer blocking the implementation of the idea in this repo.
-
 This is a project where I attempt to see if replacing string literals with their
 localized versions (or a localizer function invocations) could feasibly be done
 by running a `postbuild` step which uses the TypeScript compiler API to pull out
 the string literals and replace/augment them.
 
-`npm build` or `npm run postbuild` with an existing `build` directory
+## Running
+
+First time after clone: `git submodule update --init --recursive`.
+This will pull in the `cra-sample` repository over at
+https://github.com/TomasHubelbauer/cra.
+This repository contains an up-to-date copy of `npx create-react-app`.
+
+Then run `cd cra-sample` followed by `npm install` and `npm run build`.
+This will ensure a `build` directory exists alongside of the `src` one.
+
+- [ ] Fix the CRA `build` command not working with the latest Node LTS version
+
+Next up, go up and run `npm install` to install the TypeScript compiler dep.
+
+Then for each run, run `node .`.
+
+- [ ] Sync these instructions with the below
 
 ## Design
 
