@@ -1,70 +1,104 @@
-import fs from "fs";
-import ts from "typescript";
+import fs from 'fs';
+import sourcemap from 'source-map';
+import typescript from 'typescript';
 
-const srcStringLiterals = await collectSrcStringLiterals();
-const srcStrings = srcStringLiterals.map(node => node.text.trim());
+// Control whether skipped string literals should be logged or not
+const debug = false;
 
-const buildStringLiterals = await collectBuildStringLiterals();
-const buildStrings = buildStringLiterals.filter(node => srcStrings.includes(node.text.trim()));
+const localizationFile = process.argv[2] + '.json';
+const translations = JSON.parse(await fs.promises.readFile(localizationFile));
 
-const shifts = new Map();
-for (const buildString of buildStrings) {
-  if (!shifts.has(buildString.sourceFile.fileName)) {
-    shifts.set(buildString.sourceFile.fileName, 0);
+// Ignore `node_modules` to not attempt to translate stuff in dependencies
+// Ignore `webpack`-related paths to not attempt to translate chunk-loading etc.
+// Ignore non-JavaScript/JSX and non-TypeScript/TSX sources to avoid assets
+// (e.g. SVGs whose contents or paths end up inlined into the bundle)
+const ignoreRegex = /node_modules|webpack|(?<!.[jt]sx?)$/;
+const limit = 15;
+const root = 'docs/static/js';
+for (const path of await fs.promises.readdir(root)) {
+  if (!path.endsWith('.js')) {
+    continue;
   }
 
-  const sourceFile = 'cra-sample/coverage/static/js/' + buildString.sourceFile.fileName;
-  const sourceText = await fs.promises.readFile(sourceFile, 'utf-8');
-  const shift = shifts.get(buildString.sourceFile.fileName);
-  const before = sourceText.slice(shift, shift + buildString.pos);
-  const after = sourceText.slice(shift + buildString.end);
-  const newText = 'TROLOLO';
-  const difference = newText.length - buildString.text.length;
-  shifts.set(buildString.sourceFile.fileName, shift + difference);
-  await fs.promises.writeFile(sourceFile, before + newText + after);
-  console.log(sourceFile, { before, newText, after });
-  console.log(buildString.text, sourceText.slice(shift + buildString.pos, shift + buildString.end), shift);
-}
+  const sourceMap = await new sourcemap.SourceMapConsumer(await fs.promises.readFile(`${root}/${path}.map`, 'utf-8'));
+  const sourceFile = typescript.createSourceFile(path, await fs.promises.readFile(`${root}/${path}`, 'utf-8'));
 
-async function collectSrcStringLiterals() {
-  const stringLiterals = [];
-  const names = await fs.promises.readdir('cra-sample/src');
-  for (const name of names) {
-    if (!name.endsWith('.js')) {
-      continue;
+  function makeTransformer(/** @type {typescript.TransformationContext} */ context) {
+    return function visit(/** @type {typescript.Node} */ node) {
+      return typescript.visitNode(node, node => {
+        if (node.kind !== typescript.SyntaxKind.StringLiteral) {
+          return typescript.visitEachChild(node, visit, context);
+        }
+
+        const { line: lineStart, character: characterStart } = sourceFile.getLineAndCharacterOfPosition(node.pos);
+        const { line: lineEnd, character: characterEnd } = sourceFile.getLineAndCharacterOfPosition(node.end);
+  
+        // TODO: Figure out both `startMap` and `endMap` always have the same line and column
+        const startMap = sourceMap.originalPositionFor({ line: lineStart + 1, column: characterStart });
+        const endMap = sourceMap.originalPositionFor({ line: lineEnd + 1, column: characterEnd });
+
+        if (!startMap.source || !endMap.source) {
+          // Skip non-user string literals like `use strict` and `__esModule`
+          return node;
+        }
+
+        if (startMap.source.match(ignoreRegex) || endMap.source.match(ignoreRegex)) {
+          // Skip over string literals coming from dependencies, assets etc.
+          return node;
+        }
+
+        const text = node.text;
+        const trimmedText = text.trim();
+
+        /** @type {{ text: string; key: string; trimmed: boolean; } | undefined} */
+        let translation;
+
+        // Offer the convenience of not having to use leading and trailing space
+        // TODO: Also enable keys with positions from the source map not build
+        const keys = [
+          // Look for a 1:1 string to string translation regardless of context
+          { key: text },
+          { key: trimmedText, trimmed: true },
+
+          // Look for a translation for a string from a file at a given path
+          { key: path + ':' + text },
+          { key: path + ':' + trimmedText, trimmed: true },
+          
+          // Look for a translation for a string from a given file and position
+          { key: `${path}:${lineStart}:${characterStart}:${text}` },
+          { key: `${path}:${lineStart}:${characterStart}:${trimmedText}`, trimmed: true },
+        ];
+
+        // Look for a few variations of keys to find the right translation
+        for (const { key, trimmed } of keys) {
+          const text = translations[key];
+          if (text !== undefined) {
+            const textDebug = text.length > limit ? text.slice(0, limit) + '…' : text;
+            const keyDebug = key.length > limit ? key.slice(0, limit) + '…' : key;
+            translation = { text, textDebug, key, keyDebug, trimmed };
+            break;
+          }
+        }
+
+        const textDebug = text.length > limit ? text.slice(0, limit) + '…' : text;
+        if (!translation) {
+          debug && console.debug(`Skipped "${textDebug}" as it has no translation in ${localizationFile}`);
+          return node;
+        }
+
+        // Recover leading and/or trailing white-space if the key omitted it
+        if (translation.trimmed) {
+          const leadingWhitespace = text.match(/^\s+/)?.[0] ?? '';
+          const trailingWhitespace = text.match(/\s+$/)?.[0] ?? '';
+          translation.text = leadingWhitespace + translation.text + trailingWhitespace;
+        }
+
+        console.log(`Replaced "${textDebug}" with "${translation.textDebug}" from ${localizationFile} under "${translation.keyDebug}" in ${path}`);
+        return context.factory.createStringLiteral(translation.text);
+      });
     }
-
-    const sourceText = await fs.promises.readFile('cra-sample/src/' + name, 'utf-8');
-    const sourceFile = ts.createSourceFile(name, sourceText, ts.ScriptTarget.Latest);
-    collect(sourceFile, stringLiterals);
   }
 
-  return stringLiterals;
-}
-
-async function collectBuildStringLiterals() {
-  const stringLiterals = [];
-  const names = await fs.promises.readdir('cra-sample/build/static/js');
-  for (const name of names) {
-    if (!name.endsWith('.js')) {
-      continue;
-    }
-
-    const sourceText = await fs.promises.readFile('cra-sample/build/static/js/' + name, 'utf-8');
-    const sourceFile = ts.createSourceFile(name, sourceText, ts.ScriptTarget.Latest);
-    collect(sourceFile, stringLiterals);
-  }
-
-  return stringLiterals;
-}
-
-function collect(/** @type {ts.SourceFile} */ sourceFile, /** @type {ts.Node[]} */ strings, /** @type {ts.Node} */ node = sourceFile) {
-  if (node.kind === 10 /* StringLiteral */ || node.kind === 11 /* JsxText */) {
-    if (node.text.trim() !== '') {
-      node.sourceFile = sourceFile;
-      strings.push(node);
-    }
-  }
-
-  ts.forEachChild(node, node => collect(sourceFile, strings, node));
+  const { transformed: [targetFile] } = typescript.transform(sourceFile, [makeTransformer]);
+  await fs.promises.writeFile(`${root}/${path}`, typescript.createPrinter().printFile(targetFile));
 }

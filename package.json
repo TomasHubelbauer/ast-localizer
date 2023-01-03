@@ -1,6 +1,14 @@
 {
   "type": "module",
+  "scripts": {
+    "prestart": "([ -d cra ] || npx create-react-app cra) && ([ -d cra/build ] || (cd cra && npm install && npm run build)) && rm -rf docs && cp -r cra/build docs",
+    "start": "node . cs-cz"
+  },
   "dependencies": {
+    "source-map": "^0.7.4",
     "typescript": "^4.2.3"
+  },
+  "devDependencies": {
+    "create-react-app": "^5.0.1"
   }
 }
