@@ -42,11 +42,6 @@ the translations as well as distinguishing potential conflicts:
 
 ## To-Do
 
-### Configure `homepage` in the `cra` `package.json` to fix hosting on GH Pages
-
-GH Pages run off a relative path so they need this setting to be configured:
-https://create-react-app.dev/docs/deployment/#building-for-relative-paths
-
 ### Consider turning this into a Babel plugin (TypeScript doesn't have plugins)
 
 Babel transformations:
